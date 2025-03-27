@@ -131,6 +131,13 @@ document.addEventListener('DOMContentLoaded', () => {
         hamburger.addEventListener('click', () => {
             hamburger.classList.toggle('active');
             navLinks.classList.toggle('active');
+            
+            // 当菜单展开时防止背景滚动
+            if (hamburger.classList.contains('active')) {
+                document.body.style.overflow = 'hidden';
+            } else {
+                document.body.style.overflow = '';
+            }
         });
     }
 
@@ -140,6 +147,20 @@ document.addEventListener('DOMContentLoaded', () => {
         link.addEventListener('click', () => {
             hamburger.classList.remove('active');
             navLinks.classList.remove('active');
+            document.body.style.overflow = ''; // 恢复滚动
+            
+            // 添加平滑滚动和适当的延迟，确保菜单闭合后再滚动
+            const href = link.getAttribute('href');
+            const targetElement = document.querySelector(href);
+            if (targetElement) {
+                setTimeout(() => {
+                    window.scrollTo({
+                        top: targetElement.offsetTop - 80,
+                        behavior: 'smooth'
+                    });
+                }, 300);
+                return false;
+            }
         });
     });
 
@@ -200,13 +221,8 @@ document.addEventListener('DOMContentLoaded', () => {
             duration: 1, 
             opacity: 0, 
             y: 30, 
-            delay: 1.1 
-        });
-        gsap.from('.social-icons', { 
-            duration: 1, 
-            opacity: 0, 
-            y: 30, 
-            delay: 1.4 
+            delay: 1.1,
+            stagger: 0.2
         });
         gsap.from('.hero-image', { 
             duration: 1.5, 
@@ -380,6 +396,7 @@ document.addEventListener('DOMContentLoaded', () => {
         let isDragging = false;
         let autoRotateInterval;
         let universeCreated = false;
+        let isExpanded = false; // 跟踪魔方是否处于展开状态
         
         // 更新魔方旋转
         function updateCubeRotation() {
@@ -398,6 +415,32 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         startAutoRotate();
+        
+        // 切换魔方展开/收起状态
+        function toggleCubeExpansion() {
+            if (isExpanded) {
+                // 收起魔方
+                cubeWrapper.classList.remove('expanded');
+                cube.classList.remove('expanded');
+                
+                // 恢复自动旋转
+                setTimeout(() => {
+                    autoRotate = true;
+                }, 1000);
+            } else {
+                // 展开魔方
+                cubeWrapper.classList.add('expanded');
+                cube.classList.add('expanded');
+                
+                // 暂停自动旋转
+                autoRotate = false;
+                
+                // 创建小宇宙
+                createUniverse();
+            }
+            
+            isExpanded = !isExpanded; // 切换状态
+        }
         
         // 小宇宙效果
         const universeContainer = document.getElementById('universe-container');
@@ -628,30 +671,324 @@ document.addEventListener('DOMContentLoaded', () => {
             universeRenderer.render(universeScene, universeCamera);
         }
         
-        // 魔方悬停交互
-        cubeWrapper.addEventListener('mouseenter', () => {
+        // 魔方交互 - 适用于电脑和移动设备
+        
+        // 点击/触摸事件 - 改进后的处理逻辑
+        cubeWrapper.addEventListener('click', (e) => {
+            if (!isDragging) {
+                // 检查是否是面的点击事件被冒泡上来的
+                if (e.target !== cubeWrapper && !e.target.classList.contains('universe-container')) {
+                    return; // 如果是魔方面的点击事件，则不处理
+                }
+                
+                // 切换魔方展开/收起状态
+                toggleCubeExpansion();
+            }
+        });
+        
+        // 桌面设备 - 鼠标进入/离开事件
+        if (window.matchMedia("(min-width: 1024px)").matches) {
+            cubeWrapper.addEventListener('mouseenter', () => {
+                // 暂停自动旋转
+                autoRotate = false;
+                
+                // 添加展开类
+                cubeWrapper.classList.add('expanded');
+                cube.classList.add('expanded');
+                isExpanded = true;
+                
+                // 创建小宇宙
+                createUniverse();
+            });
+            
+            cubeWrapper.addEventListener('mouseleave', () => {
+                // 移除展开类
+                cubeWrapper.classList.remove('expanded');
+                cube.classList.remove('expanded');
+                isExpanded = false;
+                
+                // 恢复自动旋转
+                setTimeout(() => {
+                    autoRotate = true;
+                }, 1000);
+            });
+        }
+        
+        // 拖拽开始事件
+        cubeWrapper.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            lastX = e.clientX;
+            lastY = e.clientY;
+            cubeWrapper.style.cursor = 'grabbing';
+        });
+        
+        // 触摸开始事件 - 移动设备
+        cubeWrapper.addEventListener('touchstart', (e) => {
+            isDragging = true;
+            lastX = e.touches[0].clientX;
+            lastY = e.touches[0].clientY;
+        });
+        
+        // 拖拽移动事件
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            
             // 暂停自动旋转
             autoRotate = false;
             
-            // 添加展开类
-            cubeWrapper.classList.add('expanded');
-            cube.classList.add('expanded');
+            // 计算拖拽距离
+            const deltaX = e.clientX - lastX;
+            const deltaY = e.clientY - lastY;
             
-            // 创建小宇宙
-            createUniverse();
+            // 更新旋转角度
+            rotateY += deltaX * 0.5;
+            rotateX -= deltaY * 0.5;
+            
+            updateCubeRotation();
+            
+            lastX = e.clientX;
+            lastY = e.clientY;
         });
         
-        cubeWrapper.addEventListener('mouseleave', () => {
-            // 移除展开类
-            cubeWrapper.classList.remove('expanded');
-            cube.classList.remove('expanded');
+        // 触摸移动事件 - 移动设备
+        document.addEventListener('touchmove', (e) => {
+            if (!isDragging) return;
             
-            // 恢复自动旋转
+            // 阻止页面滚动
+            e.preventDefault();
+            
+            // 暂停自动旋转
+            autoRotate = false;
+            
+            // 计算拖拽距离
+            const deltaX = e.touches[0].clientX - lastX;
+            const deltaY = e.touches[0].clientY - lastY;
+            
+            // 更新旋转角度
+            rotateY += deltaX * 0.5;
+            rotateX -= deltaY * 0.5;
+            
+            updateCubeRotation();
+            
+            lastX = e.touches[0].clientX;
+            lastY = e.touches[0].clientY;
+        }, { passive: false });
+        
+        // 拖拽结束事件
+        document.addEventListener('mouseup', () => {
+            isDragging = false;
+            cubeWrapper.style.cursor = 'grab';
+            
+            // 拖拽结束后5秒恢复自动旋转
             setTimeout(() => {
                 autoRotate = true;
-            }, 1000);
+            }, 5000);
         });
         
+        // 触摸结束事件 - 移动设备
+        document.addEventListener('touchend', () => {
+            isDragging = false;
+            
+            // 触摸结束后5秒恢复自动旋转
+            setTimeout(() => {
+                if (!isExpanded) {  // 只有当魔方未展开时才恢复自动旋转
+                    autoRotate = true;
+                }
+            }, 5000);
+        });
+        
+        // 鼠标移出事件
+        cubeWrapper.addEventListener('mouseleave', () => {
+            isDragging = false;
+            cubeWrapper.style.cursor = 'grab';
+        });
+        
+        // 原来的点击事件 - 随机旋转到一个面 (仅当不是展开/收起操作时)
+        cubeWrapper.addEventListener('click', (e) => {
+            // 判断是否是直接点击了cubeWrapper而不是其子元素
+            if (e.target === cubeWrapper) {
+                return; // 不处理，因为这应该由toggleCubeExpansion函数处理
+            }
+            
+            if (!isDragging) {
+                // 随机选择旋转轴和角度
+                const axes = ['X', 'Y', 'Z'];
+                const axis = axes[Math.floor(Math.random() * axes.length)];
+                const angle = Math.floor(Math.random() * 4) * 90; // 0, 90, 180, 270
+                
+                // 创建闪烁效果
+                cube.classList.add('cube-flash');
+                setTimeout(() => {
+                    cube.classList.remove('cube-flash');
+                }, 500);
+                
+                // 设置新的旋转角度
+                if (axis === 'X') rotateX = angle;
+                if (axis === 'Y') rotateY = angle;
+                if (axis === 'Z') rotateZ = angle;
+                
+                // 使用GSAP动画平滑过渡
+                if (typeof gsap !== 'undefined') {
+                    gsap.to(cube, {
+                        duration: 1,
+                        ease: "power2.inOut",
+                        onUpdate: updateCubeRotation
+                    });
+                } else {
+                    updateCubeRotation();
+                }
+                
+                // 暂停自动旋转
+                autoRotate = false;
+                
+                // 3秒后恢复自动旋转
+                setTimeout(() => {
+                    if (!isExpanded) {  // 只有当魔方未展开时才恢复自动旋转
+                        autoRotate = true;
+                    }
+                }, 3000);
+            }
+        });
+        
+        // 鼠标滚轮事件 - 控制Z轴旋转
+        cubeWrapper.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            
+            rotateZ += e.deltaY > 0 ? 5 : -5;
+            updateCubeRotation();
+            
+            // 暂停自动旋转
+            autoRotate = false;
+            
+            // 3秒后恢复自动旋转
+            setTimeout(() => {
+                autoRotate = true;
+            }, 3000);
+        });
+        
+        // 为魔方面添加悬停效果
+        cubeFaces.forEach((face) => {
+            face.addEventListener('mouseenter', () => {
+                // 为当前悬停的面添加放大效果
+                face.classList.add('cube-face-hover');
+                
+                // 暂停自动旋转
+                autoRotate = false;
+            });
+            
+            face.addEventListener('mouseleave', () => {
+                // 移除放大效果
+                face.classList.remove('cube-face-hover');
+                
+                // 恢复自动旋转
+                autoRotate = true;
+            });
+            
+            // 面的点击事件
+            face.addEventListener('click', (e) => {
+                e.stopPropagation(); // 防止触发cube-wrapper的点击事件
+                
+                // 切换面的活跃状态
+                face.classList.toggle('cube-face-active');
+                
+                // 如果面是活跃的，添加特殊效果
+                if (face.classList.contains('cube-face-active')) {
+                    // 添加脉冲动画
+                    face.style.animation = 'pulse 1.5s infinite';
+                } else {
+                    // 移除脉冲动画
+                    face.style.animation = '';
+                }
+            });
+        });
+        
+        // 双击魔方重置旋转
+        cubeWrapper.addEventListener('dblclick', () => {
+            // 使用GSAP动画平滑过渡到初始状态
+            if (typeof gsap !== 'undefined') {
+                gsap.to(cube, {
+                    duration: 1,
+                    rotateX: 0,
+                    rotateY: 0,
+                    rotateZ: 0,
+                    ease: "power2.inOut",
+                    onUpdate: () => {
+                        rotateX = 0;
+                        rotateY = 0;
+                        rotateZ = 0;
+                        updateCubeRotation();
+                    }
+                });
+            } else {
+                rotateX = 0;
+                rotateY = 0;
+                rotateZ = 0;
+                updateCubeRotation();
+            }
+            
+            // 恢复自动旋转
+            autoRotate = true;
+            
+            // 重置所有面的活跃状态
+            cubeFaces.forEach((face) => {
+                face.classList.remove('cube-face-active', 'cube-face-hover');
+                face.style.animation = '';
+            });
+        });
+        
+        // 添加按键控制
+        document.addEventListener('keydown', (e) => {
+            // 只有当魔方在视野中时才响应按键
+            const rect = cubeWrapper.getBoundingClientRect();
+            const isVisible = (
+                rect.top >= 0 &&
+                rect.left >= 0 &&
+                rect.bottom <= window.innerHeight &&
+                rect.right <= window.innerWidth
+            );
+            
+            if (!isVisible) return;
+            
+            switch (e.key) {
+                case 'ArrowUp':
+                    rotateX -= 10;
+                    break;
+                case 'ArrowDown':
+                    rotateX += 10;
+                    break;
+                case 'ArrowLeft':
+                    rotateY -= 10;
+                    break;
+                case 'ArrowRight':
+                    rotateY += 10;
+                    break;
+                case 'PageUp':
+                    rotateZ -= 10;
+                    break;
+                case 'PageDown':
+                    rotateZ += 10;
+                    break;
+                case ' ': // 空格键暂停/恢复自动旋转
+                    autoRotate = !autoRotate;
+                    break;
+                case 'r': // r键重置旋转
+                    rotateX = 0;
+                    rotateY = 0;
+                    rotateZ = 0;
+                    break;
+            }
+            
+            updateCubeRotation();
+            
+            // 暂停自动旋转（如果按的不是空格键）
+            if (e.key !== ' ') {
+                autoRotate = false;
+                setTimeout(() => {
+                    autoRotate = true;
+                }, 3000);
+            }
+        });
+
         // 3D佛像模型加载与渲染
         const buddhaContainer = document.getElementById('buddha-container');
         if (buddhaContainer && typeof THREE !== 'undefined') {
@@ -795,230 +1132,5 @@ document.addEventListener('DOMContentLoaded', () => {
                 renderer.setSize(buddhaContainer.clientWidth, buddhaContainer.clientHeight);
             });
         }
-        
-        // 拖拽开始事件
-        cubeWrapper.addEventListener('mousedown', (e) => {
-            isDragging = true;
-            lastX = e.clientX;
-            lastY = e.clientY;
-            cubeWrapper.style.cursor = 'grabbing';
-        });
-        
-        // 拖拽移动事件
-        document.addEventListener('mousemove', (e) => {
-            if (!isDragging) return;
-            
-            // 暂停自动旋转
-            autoRotate = false;
-            
-            // 计算拖拽距离
-            const deltaX = e.clientX - lastX;
-            const deltaY = e.clientY - lastY;
-            
-            // 更新旋转角度
-            rotateY += deltaX * 0.5;
-            rotateX -= deltaY * 0.5;
-            
-            updateCubeRotation();
-            
-            lastX = e.clientX;
-            lastY = e.clientY;
-        });
-        
-        // 拖拽结束事件
-        document.addEventListener('mouseup', () => {
-            isDragging = false;
-            cubeWrapper.style.cursor = 'grab';
-            
-            // 拖拽结束后5秒恢复自动旋转
-            setTimeout(() => {
-                autoRotate = true;
-            }, 5000);
-        });
-        
-        // 鼠标移出事件
-        cubeWrapper.addEventListener('mouseleave', () => {
-            isDragging = false;
-            cubeWrapper.style.cursor = 'grab';
-        });
-        
-        // 点击事件 - 随机旋转到一个面
-        cubeWrapper.addEventListener('click', (e) => {
-            if (!isDragging) {
-                // 随机选择旋转轴和角度
-                const axes = ['X', 'Y', 'Z'];
-                const axis = axes[Math.floor(Math.random() * axes.length)];
-                const angle = Math.floor(Math.random() * 4) * 90; // 0, 90, 180, 270
-                
-                // 创建闪烁效果
-                cube.classList.add('cube-flash');
-                setTimeout(() => {
-                    cube.classList.remove('cube-flash');
-                }, 500);
-                
-                // 设置新的旋转角度
-                if (axis === 'X') rotateX = angle;
-                if (axis === 'Y') rotateY = angle;
-                if (axis === 'Z') rotateZ = angle;
-                
-                // 使用GSAP动画平滑过渡
-                if (typeof gsap !== 'undefined') {
-                    gsap.to(cube, {
-                        duration: 1,
-                        ease: "power2.inOut",
-                        onUpdate: updateCubeRotation
-                    });
-                } else {
-                    updateCubeRotation();
-                }
-                
-                // 暂停自动旋转
-                autoRotate = false;
-                
-                // 3秒后恢复自动旋转
-                setTimeout(() => {
-                    autoRotate = true;
-                }, 3000);
-            }
-        });
-        
-        // 鼠标滚轮事件 - 控制Z轴旋转
-        cubeWrapper.addEventListener('wheel', (e) => {
-            e.preventDefault();
-            
-            rotateZ += e.deltaY > 0 ? 5 : -5;
-            updateCubeRotation();
-            
-            // 暂停自动旋转
-            autoRotate = false;
-            
-            // 3秒后恢复自动旋转
-            setTimeout(() => {
-                autoRotate = true;
-            }, 3000);
-        });
-        
-        // 为魔方面添加悬停效果
-        cubeFaces.forEach((face) => {
-            face.addEventListener('mouseenter', () => {
-                // 为当前悬停的面添加放大效果
-                face.classList.add('cube-face-hover');
-                
-                // 暂停自动旋转
-                autoRotate = false;
-            });
-            
-            face.addEventListener('mouseleave', () => {
-                // 移除放大效果
-                face.classList.remove('cube-face-hover');
-                
-                // 恢复自动旋转
-                autoRotate = true;
-            });
-            
-            // 面的点击事件
-            face.addEventListener('click', (e) => {
-                e.stopPropagation(); // 防止触发cube-wrapper的点击事件
-                
-                // 切换面的活跃状态
-                face.classList.toggle('cube-face-active');
-                
-                // 如果面是活跃的，添加特殊效果
-                if (face.classList.contains('cube-face-active')) {
-                    // 添加脉冲动画
-                    face.style.animation = 'pulse 1.5s infinite';
-                } else {
-                    // 移除脉冲动画
-                    face.style.animation = '';
-                }
-            });
-        });
-        
-        // 双击魔方重置旋转
-        cubeWrapper.addEventListener('dblclick', () => {
-            // 使用GSAP动画平滑过渡到初始状态
-            if (typeof gsap !== 'undefined') {
-                gsap.to(cube, {
-                    duration: 1,
-                    rotateX: 0,
-                    rotateY: 0,
-                    rotateZ: 0,
-                    ease: "power2.inOut",
-                    onUpdate: () => {
-                        rotateX = 0;
-                        rotateY = 0;
-                        rotateZ = 0;
-                        updateCubeRotation();
-                    }
-                });
-            } else {
-                rotateX = 0;
-                rotateY = 0;
-                rotateZ = 0;
-                updateCubeRotation();
-            }
-            
-            // 恢复自动旋转
-            autoRotate = true;
-            
-            // 重置所有面的活跃状态
-            cubeFaces.forEach((face) => {
-                face.classList.remove('cube-face-active', 'cube-face-hover');
-                face.style.animation = '';
-            });
-        });
-        
-        // 添加按键控制
-        document.addEventListener('keydown', (e) => {
-            // 只有当魔方在视野中时才响应按键
-            const rect = cubeWrapper.getBoundingClientRect();
-            const isVisible = (
-                rect.top >= 0 &&
-                rect.left >= 0 &&
-                rect.bottom <= window.innerHeight &&
-                rect.right <= window.innerWidth
-            );
-            
-            if (!isVisible) return;
-            
-            switch (e.key) {
-                case 'ArrowUp':
-                    rotateX -= 10;
-                    break;
-                case 'ArrowDown':
-                    rotateX += 10;
-                    break;
-                case 'ArrowLeft':
-                    rotateY -= 10;
-                    break;
-                case 'ArrowRight':
-                    rotateY += 10;
-                    break;
-                case 'PageUp':
-                    rotateZ -= 10;
-                    break;
-                case 'PageDown':
-                    rotateZ += 10;
-                    break;
-                case ' ': // 空格键暂停/恢复自动旋转
-                    autoRotate = !autoRotate;
-                    break;
-                case 'r': // r键重置旋转
-                    rotateX = 0;
-                    rotateY = 0;
-                    rotateZ = 0;
-                    break;
-            }
-            
-            updateCubeRotation();
-            
-            // 暂停自动旋转（如果按的不是空格键）
-            if (e.key !== ' ') {
-                autoRotate = false;
-                setTimeout(() => {
-                    autoRotate = true;
-                }, 3000);
-            }
-        });
     }
 }); 
